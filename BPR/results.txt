@@ -1,0 +1,16 @@
+/home/hrv7/harsh/anaconda3/envs/pytorch1.1/bin/python /home/hrv7/harsh/PycharmProjects/movielens-transe/BPR/BPR_lightFM.py
+Num users: 138493, num_items 26744.
+<138493x26744 sparse matrix of type '<class 'numpy.int32'>'
+	with 20000263 stored elements in COOrdinate format>
+Precision: train 0.43, test 0.10.
+AUC: train 0.92, test 0.90.
+
+
+
+/home/hrv7/harsh/anaconda3/envs/pytorch1.1/bin/python /home/hrv7/harsh/PycharmProjects/movielens-transe/BPR/BPR_lighFMv2.py
+Num users: 138493, num_items 26744.
+<138493x26744 sparse matrix of type '<class 'numpy.int32'>'
+	with 20000263 stored elements in COOrdinate format>
+Precision: train 0.45, test 0.10.
+Recall: train 0.08, test 0.07.
+AUC: train 0.92, test 0.91.
