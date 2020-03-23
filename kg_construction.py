@@ -15,6 +15,7 @@ import contextlib
 from easydict import EasyDict as edict
 import sys
 import copy
+import pprint
 
 
 class MovieLens():
@@ -51,6 +52,7 @@ class MovieLens():
     os.makedirs(r"data_processed/relations", exist_ok=True)
     os.makedirs(r"data_processed/relations_indices", exist_ok=True)
     os.makedirs(r"data_processed/entities", exist_ok=True)
+    os.makedirs(r"data_processed/new_entities", exist_ok=True)
     os.makedirs(r"data_processed/test", exist_ok=True)
     os.makedirs(r"data_processed/test_indices", exist_ok=True)
     os.makedirs(r"TempFiles", exist_ok=True)
@@ -63,6 +65,10 @@ class MovieLens():
     self.relations_indices_dir = r'data_processed/relations_indices'
     self.test_indices_dir = r'data_processed/test_indices'
     self.relations_ordered = r"data_processed/relations_ordered.txt"
+
+    #new dirs
+    self.new_relations_indices_dir = r'data_processed/new_relations_indices'
+    self.new_test_indices_dir = r'data_processed/new_test_indices'
 
     self.batch_size = 64
 
@@ -163,10 +169,10 @@ driver function to create initial files for custom freebase_database.txt
 :return:
 """
     self.flush_temp_files()
-    self.process_files(self.one_step_graph, r"data_processed/data_ids_only.txt", util.ids_only, 'IDs only')
+    self.process_files(self.one_step_graph, r"data_processed/data_ids_only.txt", util_v2.ids_only, 'IDs only')
 
-  # self.process_files(self.one_step_graph, r"data_processed/data_ids_topics.txt", util.ids_topics, 'IDs n Topics')
-  # self.process_files(self.one_step_graph, r"data_processed/data_all_rels.txt", util.all_rels, 'All relations')
+  # self.process_files(self.one_step_graph, r"data_processed/data_ids_topics.txt", util_v2.ids_topics, 'IDs n Topics')
+  # self.process_files(self.one_step_graph, r"data_processed/data_all_rels.txt", util_v2.all_rels, 'All relations')
 
   def freebase_dataset(self):
     """
@@ -202,9 +208,9 @@ driver function to create initial files for custom freebase_database.txt
             train_idx = int(len(values) * 0.7)
             # 70%-30% train-test split
             for movie in values[:train_idx]:
-              f.write(str(key) + '\t' + 'user.watched.movie' + '\t' + str(movie) + '\n')
+              f.write(str(key) + '\t' + 'user_watched.user_id.movie' + '\t' + 'movie_id_'+str(movie) + '\n')
             for movie in values[train_idx:]:
-              f2t.write(str(key) + '\t' + 'user.watched.movie' + '\t' + str(movie) + '\n')
+              f2t.write(str(key) + '\t' + 'user_watched.user_id.movie' + '\t' + 'movie_id_'+str(movie) + '\n')
     print('Completed. Time elapsed: ', datetime.now() - s)
 
   def get_relations(self):
@@ -241,33 +247,64 @@ create a new file for each qualified relation and store all possible interaction
       for ele in f:
         self.fbs = ele.strip()
         cur_path = os.path.join(r"data_processed/relations", ele.strip() + '.txt')
-        self.process_files(self.data_freebase, cur_path, util.extract_rels,
+        self.process_files(self.data_freebase, cur_path, util_v2.extract_rels,
                            'Relations extraction: ' + ele.strip())
-    # recognize entities
-    self.make_entities()
-    # relations with indices
-    print('\nCreating relations with indices\n')
-    s0 = datetime.now()
-    self.get_indices()
-    dirs_to_explore = {self.relations_dir: self.relations_indices_dir, self.test_dir: self.test_indices_dir}
-    for dirs, indice_dirs in dirs_to_explore.items():
-      for r, d, f in os.walk(dirs):
-        for file in f:
-          if '.txt' in file:
-            s = datetime.now()
-            print(file)
-            with open(os.path.join(r, file), 'r') as f2r:
-              with open(os.path.join(indice_dirs, file), 'w') as f2w:
-                for lines in f2r:
-                  line = lines.split()
-                  head_entity = line[1].strip().split('.')[0]
-                  tail_entity = line[1].strip().split('.')[2]
-                  output = str(self.indices['entity'][head_entity][line[0].strip()]) + '\t' + str(
-                    self.indices['relation'][line[1].strip()]) + '\t' + \
-                           str(self.indices['entity'][tail_entity][line[2].strip()]) + '\n'
-                  f2w.write(output)
-            print('Processing completed. Time elapsed: ', datetime.now() - s)
-    print('Total time elapsed: ', datetime.now() - s0)
+        self.make_indiced_relations()
+
+  def make_indiced_relations(self, new_entities_dir=None):
+    """
+    creates relations_indices with newly created entity types from entity permutaions in MovieLensDataLoader
+    :return:
+    """
+    if not new_entities_dir:
+      # recognize entities
+      self.make_entities()
+      # relations with indices
+      print('\nCreating relations with indices\n')
+      s0 = datetime.now()
+      self.get_indices()
+      dirs_to_explore = {self.relations_dir: self.relations_indices_dir, self.test_dir: self.test_indices_dir}
+      for dirs, indice_dirs in dirs_to_explore.items():
+        for r, d, f in os.walk(dirs):
+          for file in f:
+            if '.txt' in file:
+              s = datetime.now()
+              print(file)
+              with open(os.path.join(r, file), 'r') as f2r:
+                with open(os.path.join(indice_dirs, file), 'w') as f2w:
+                  for lines in f2r:
+                    line = lines.split()
+                    head_entity = line[1].strip().split('.')[1]
+                    tail_entity = line[1].strip().split('.')[2]
+                    output = str(self.indices['entity'][head_entity][line[0].strip()]) + '\t' + str(
+                      self.indices['relation'][line[1].strip()]) + '\t' + \
+                             str(self.indices['entity'][tail_entity][line[2].strip()]) + '\n'
+                    f2w.write(output)
+              print('Processing completed. Time elapsed: ', datetime.now() - s)
+      print('Total time elapsed: ', datetime.now() - s0)
+    else:
+      print('\nRe-creating relations with indices\n')
+      s0 = datetime.now()
+      self.get_indices(new_entities_dir)
+      dirs_to_explore = {self.relations_dir: self.relations_indices_dir, self.test_dir: self.test_indices_dir}
+      for dirs, indice_dirs in dirs_to_explore.items():
+        for r, d, f in os.walk(dirs):
+          for file in f:
+            if '.txt' in file:
+              s = datetime.now()
+              print(file)
+              with open(os.path.join(r, file), 'r') as f2r:
+                with open(os.path.join(indice_dirs, file), 'w') as f2w:
+                  for lines in f2r:
+                    line = lines.split()
+                    head_entity = line[1].strip().split('.')[1]
+                    tail_entity = line[1].strip().split('.')[2]
+                    output = str(self.indices['composite_entities'][head_entity][line[0].strip()]) + '\t' + str(
+                      self.indices['relation'][line[1].strip()]) + '\t' + \
+                             str(self.indices['entity'][tail_entity][line[2].strip()]) + '\n'
+                    f2w.write(output)
+              print('Processing completed. Time elapsed: ', datetime.now() - s)
+      print('Total time elapsed: ', datetime.now() - s0)
 
   def make_entities(self):
     """
@@ -280,13 +317,13 @@ creates entities from relation files
       for file in f:
         if '.txt' in file:
           ele = file.split(sep='.')
-          entities[ele[0]] = entities.get(ele[0], set())
+          entities[ele[1]] = entities.get(ele[1], set())
           entities[ele[2]] = entities.get(ele[2], set())
 
           with open(os.path.join(r, file), 'r') as f2r:
             for line in f2r:
               entity_ele = line.split()
-              entities[ele[0]].add(entity_ele[0])
+              entities[ele[1]].add(entity_ele[0])
               entities[ele[2]].add(entity_ele[2])
     # add entities from test_set
     for r, d, f in os.walk(self.test_dir):
@@ -294,7 +331,7 @@ creates entities from relation files
         with open(os.path.join(r, file), 'r') as f2r:
           for line in f2r:
             entity_ele = line.split()
-            et_head = entity_ele[1].split('.')[0]
+            et_head = entity_ele[1].split('.')[1]
             et_tail = entity_ele[1].split('.')[2]
             entities[et_head].add(entity_ele[0])
             entities[et_tail].add(entity_ele[2])
@@ -305,22 +342,34 @@ creates entities from relation files
           f2w.write(v + '\n')
       print('Completed entity: ', key)
 
-  def get_indices(self):
+  def get_indices(self, new_entities_dir=None):
     """
 populates the indexes of relations and entities in their respective dictionaries
 :return: None
 """
-    for r, d, f in os.walk(self.entities_dir):
-      for file in f:
-        if '.txt' in file:
-          entity_name = file.replace('.txt', '').strip()
-          self.entity_indice_dict[entity_name] = {}
-          with open(os.path.join(r, file), 'r') as cur:
-            count = 0
-            for line in cur:
-              self.entity_indice_dict[entity_name][line.strip()] = self.entity_indice_dict[
-                entity_name].get(line.strip(), count)
-              count += 1
+    if new_entities_dir:
+      for r, d, f in os.walk(new_entities_dir):
+        self.indice_dict['composite_entities'] = {}
+        for file in f:
+          if '.txt' in file:
+            with open(os.path.join(r, file), 'r') as cur:
+              count = 0
+              for line in cur:
+                self.indice_dict['composite_entities'][line.strip()] = self.indice_dict[
+                  'composite_entities'].get(line.strip(), count)
+                count += 1
+    else:
+      for r, d, f in os.walk(self.entities_dir):
+        for file in f:
+          if '.txt' in file:
+            entity_name = file.replace('.txt', '').strip()
+            self.entity_indice_dict[entity_name] = {}
+            with open(os.path.join(r, file), 'r') as cur:
+              count = 0
+              for line in cur:
+                self.entity_indice_dict[entity_name][line.strip()] = self.entity_indice_dict[
+                  entity_name].get(line.strip(), count)
+                count += 1
 
     with open(self.relations_ordered_used, 'r') as file:
       count = 0
@@ -340,10 +389,12 @@ class MovieLensDataLoader():
     self.relations_ordered_used = os.path.join(cwd, r'data_processed/relations_ordered_used.txt')
     self.relations_ordered = os.path.join(cwd, r"data_processed/relations_ordered.txt")
     self.entities_dir = os.path.join(cwd, r'data_processed/entities')
+    self.new_entities_dir = os.path.join(cwd, r'data_processed/new_entities')
     self.relations_dir = os.path.join(cwd, r'data_processed/relations')
     self.edict_relations_pkl = os.path.join(cwd, r'data_processed/edict_relations.pkl')
     self.edict_relations_dict_pkl = os.path.join(cwd, r'data_processed/edict_relations_dict.pkl')
     self.relations_indices_dir = os.path.join(cwd, r'data_processed/relations_indices')
+    self.new_relations_indices_dir = os.path.join(cwd, r'data_processed/new_relations_indices')
     self.batch_size = batch_size
     # change unacceptable entity and relation names
     self.lexicon = {'type': 'types'}
@@ -354,6 +405,8 @@ class MovieLensDataLoader():
     self.ez_dataset_relations = []
     self.word_size = 0
     self.number_of_relations = 0
+
+    os.makedirs(r"data_processed/new_entities", exist_ok=True)
 
   def reset(self):
     # resets finished_word_counter and has_next to True
@@ -367,7 +420,8 @@ class MovieLensDataLoader():
     """
     word_size = 0
     number_of_relations = 0
-    ez_dataset = edict(entities=edict(), relations=edict(), word_size=0)
+    ez_dataset = edict(entities=edict(), relations=edict(), entity_instance=edict(), word_size=0)
+    print('Parsing entities')
     # r=root, d=directories, f = files
     for r, d, f in os.walk(self.entities_dir):
       for file in f:
@@ -384,11 +438,38 @@ class MovieLensDataLoader():
               # ez_entities[ele[0]].data.append(entity_ele[0])
               count += 1
             ez_dataset.entities[self.lexicon.get(ele[0], ele[0])].vocab_size = count
+
+    # stats on entity_permutations
+    count_permute = edict()  # Stores count of permutations
+    entity_unique_permute = edict()  # stores entity_instance->entity_type_permutation
     with open(os.path.join(os.getcwd(), r'data_processed/entity_tomy.txt'), 'w') as f:
       for k, v in ez_dataset.entities.items():
-        if 'ent_cnt' in v and v.ent_cnt>1:
+        # if 'ent_cnt' in v and v.ent_cnt>1:
+        if 'ent_cnt' in v:
           # print(k, v)
           f.write(str(k)+' '+str(v)+'\n')
+          count_permute[str(sorted(v.ents))] = count_permute.get(str(sorted(v.ents)), 0) + 1
+          entity_unique_permute[k]=entity_unique_permute.get(k, str(sorted(v.ents)))
+    with open(os.path.join(os.getcwd(), r'data_processed/entity_tomy_perm.txt'), 'w') as f2:
+      pprint.pprint(count_permute, f2)
+    # return
+    # make new relations_indices based on a new directory
+    inv_map={}
+    for k, v in entity_unique_permute.items():
+      print(('-'*10))
+      inv_map[v]=inv_map.get(v, [])+[k]
+    # inv_map={}
+    # inv_map = {v: inv_map.get(k, [])+[k] for k, v in entity_unique_permute.items()}
+    # create new entity types
+    counter=0
+    for k, v in inv_map.items():
+      counter+=1
+      with open(os.path.join(self.new_entities_dir, 'new_entity_'+str(counter)+'.txt'), 'w') as f:
+        for entities in v:
+          f.write(str(entities)+'\n')
+    # create new indiced relations
+    MovieLens().make_indiced_relations(self.new_entities_dir)
+    print('Parsing relations')
     for r, d, f in os.walk(self.relations_indices_dir):
       for file in f:
         print(file)
@@ -399,9 +480,15 @@ class MovieLensDataLoader():
           with open(os.path.join(r, file), 'r') as f2r:
             count = 0
             for line in f2r:
-              et_head = self.lexicon.get(ele.split('.')[0], ele.split('.')[0])
-              et_tail = self.lexicon.get(ele.split('.')[2], ele.split('.')[2])
+              # old way to get entity types
+              # et_head = self.lexicon.get(ele.split('.')[0], ele.split('.')[0])
+              # et_tail = self.lexicon.get(ele.split('.')[2], ele.split('.')[2])
+
+              # new way to get entity types
               entity_ele = line.strip().split()
+              et_head = entity_unique_permute[entity_ele[0]]
+              et_tail = entity_unique_permute[entity_ele[2]]
+
               ez_dataset.entities[et_head] = ez_dataset.entities.get(et_head, {})
               ez_dataset.entities[et_tail] = ez_dataset.entities.get(et_tail, {})
               ez_dataset.entities[et_head][entity_ele[0]] = ez_dataset.entities[
@@ -411,6 +498,11 @@ class MovieLensDataLoader():
                                                               et_tail].get(
                 entity_ele[2], 0) + 1
               # ez_dataset.relation[ele[0]].data.append(entity_ele[0])
+              # if et_head not in ez_dataset.entities.entity_instance.get(entity_ele[0], []):
+              #   ez_dataset.entities.entity_instance[entity_ele[0]] = ez_dataset.entities.entity_instance.get(entity_ele[0], [])+[str(et_head)]
+              # if et_tail not in ez_dataset.entities.entity_instance.get(entity_ele[2], []):
+              #   ez_dataset.entities.entity_instance[entity_ele[2]] = ez_dataset.entities.entity_instance.get(entity_ele[2], [])+[str(et_tail)]
+
               count += 1
               word_size += 1
             ez_dataset.relations[self.lexicon.get(ele, ele)].vocab_size = count
@@ -419,6 +511,12 @@ class MovieLensDataLoader():
     ez_dataset.number_of_relations = number_of_relations
     with open(self.edict_relations_pkl, 'wb') as pf:
       pickle.dump(ez_dataset, pf)
+
+    # check for duplicated instances of entity_instance in different entity_types
+    # with open(os.path.join(os.getcwd(), r'data_processed/entity_err_instances.txt'), 'w') as f:
+    #   for k, v in ez_dataset.entity_instance.items():
+    #     if len(v)>1:
+    #       f.write(str(k) + ' ' + str(v) + '\n')
 
   def load_edict(self):
     # with open(self.edict_relations_pkl, 'rb') as pf:
@@ -506,7 +604,6 @@ def main():
   # test if CWD is correct
   print(os.getcwd())
   sol = MovieLens()
-  #
   # # limit max usage to 25%
   # # comment below line for faster procesing
   # # sol.cores=int(sol.cores/4)
@@ -524,8 +621,9 @@ def main():
   # sol.get_relations()
   # sol.make_relations()
   # print('Completed execution in: ', datetime.now()-s)
-
-  # Run MovieLensDataLoader to create essential pickle files
+  #
+  # # Run MovieLensDataLoader to create essential pickle files
+  print('-'*50+' Creating pickle files')
   sol_Loader=MovieLensDataLoader(batch_size=64)
   sol_Loader.get_edict()
   # sol_Loader.build_edict_random_sampler()
