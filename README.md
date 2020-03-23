@@ -1,3 +1,7 @@
 # movielens-transe
 TransE model for MovieLens Dataset
-- Go to https://drive.google.com/drive/folders/1EbGfW3f4ly37RgfB5PbZFN1y4FmDNUs7?usp=sharing to download the dataset
+- This branch contains relevant files for RL based MovieLens recommendation  
+- env.py defines environment  
+- agent.py  
+- policies.py  
+
